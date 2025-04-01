@@ -1,9 +1,9 @@
 <?php
+
 /**
- * 获取网站favicon
- * 调用方法/get.php?url=https://log.pub
+ * 获取favicon
  * @author    yyx
- * @date      2025-3-29 19:34:53
+ * @date      2025年3月27日21:30:15
  * @link      https://log.pub
  * @version   1.0.0
  */
@@ -48,19 +48,19 @@ foreach ($faviconNames as $candidate) {
     $finalFaviconName = $candidate;
     writelog(parseUrlComponents($url)['url_with_path']);
     // 尝试站点带一级目录下的favicon.ico文件
-    getFav(parseUrlComponents($url)['url_with_path'] . $finalFaviconName, $save_fav_dir);
+    getAndSaveFav(parseUrlComponents($url)['url_with_path'] . $finalFaviconName, $save_fav_dir);
     // 尝试站点根目录下的favicon.ico文件
-    getFav(parseUrlComponents($url)['base_url'] . $finalFaviconName, $save_fav_dir);
+    getAndSaveFav(parseUrlComponents($url)['base_url'] . $finalFaviconName, $save_fav_dir);
     //  break;
 }
 //从<link rel="icon" href="/static/image/logo.png">获取
-getFav(parseUrlComponents($url)['base_url'] . getFaviconUrl($url), $save_fav_dir);
+getAndSaveFav(parseUrlComponents($url)['base_url'] . getFaviconUrl($url), $save_fav_dir);
 
 //从<link rel="icon" href="/static/image/logo.png">获取,带一级目录
-getFav(parseUrlComponents($url)['url_with_path'] . "/" . getFaviconUrl($url), $save_fav_dir);
+getAndSaveFav(parseUrlComponents($url)['url_with_path'] . "/" . getFaviconUrl($url), $save_fav_dir);
 
 //从<link rel="icon" href="/static/image/logo.png">获取,直接url
-getFav(getFaviconUrl($url), $save_fav_dir);
+getAndSaveFav(getFaviconUrl($url), $save_fav_dir);
 
 //前面执行的后面就不执行了
 //writelog($url . "/favicon.ico");
@@ -74,33 +74,70 @@ if (file_exists($defaultIconPath)) {
 }
 
 /**
- * 获取favicon图标
+ * 获取并保存favicon图标
  * @param $url 目标URL
  * @param $path 保存路径
  */
-function getFav($url, $path) {
-    $curl = get_url_content($url);
-    $file = $curl['exec'];  // 获取到的文件内容
-    $zt = $curl['getinfo']; // 状态信息
+function getAndSaveFav($url, $path) {
+    $timeout = 5; // 超时时间（秒）
+    $connectTimeout = 3; // 连接超时时间（秒）
 
-    if ($file && in_array($zt['http_code'], [200, 304])) { // 检查HTTP状态码
-        $content_type = $zt['content_type'] ?? '';
+    $ch = curl_init();
 
-// 检查是否为合法的favicon类型
-        $allowed_favicon_types = [
-            'image/x-icon',
-            'image/vnd.microsoft.icon',
-            'image/png',
-            'image/gif',
-            'image/jpeg',
-            'image/jpg',
-            //     'image/svg+xml', // SVG格式的favicon
-            'image/webp'      // WebP格式的favicon
-        ];
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36 Edg/100.0.1185.44");
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $connectTimeout);
+    curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // 不验证SSL证书
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($ch, CURLOPT_ENCODING, ''); // 不限制编码
 
-        if (in_array($content_type, $allowed_favicon_types)) {
-            echoFav($path, $file); // 保存并输出图标
-        }
+    $file_content = curl_exec($ch);
+    $file_info = curl_getinfo($ch);
+    $curl_error = curl_error($ch);
+    $curl_errno = curl_errno($ch);
+
+    curl_close($ch);
+
+    // 检查是否有 cURL 错误
+    if ($curl_errno !== 0) {
+        writelog("cURL 错误: " . $curl_error);
+        return;
+    }
+
+    // 检查请求是否成功
+    if ($file_info['http_code'] === 0) {
+        writelog("请求失败，无法获取favicon图标。");
+        return;
+    }
+
+    // 检查HTTP状态码
+    $allowed_http_codes = [200, 304];
+    if (!in_array($file_info['http_code'], $allowed_http_codes)) {
+        writelog("请求返回的HTTP状态码不合法，无法获取favicon图标。");
+        return;
+    }
+
+    $content_type = $file_info['content_type'] ?? '';
+
+    // 检查是否为合法的favicon类型
+    $allowed_favicon_types = [
+        'image/x-icon',
+        'image/vnd.microsoft.icon',
+        'image/png',
+        'image/gif',
+        'image/jpeg',
+        'image/jpg',
+        'image/webp' // WebP格式的favicon
+    ];
+
+    if (in_array($content_type, $allowed_favicon_types)) {
+        writelog("favicon图标已成功保存到:" . $path);
+        echoFav($path, $file_content); // 保存并输出图标
+    } else {
+        writelog("获取到的内容类型不合法，无法保存favicon图标");
     }
 }
 
@@ -126,34 +163,6 @@ function echoFav($path = '', $file = '') {
 
     header('Content-Type: image/x-icon');
     die($file);
-}
-
-/**
- * curl获取数据
- * @param $url 目标URL地址
- * @return array ['exec'] 获取的内容, ['getinfo'] 返回的状态码
- */
-function get_url_content($url) {
-    $ch = curl_init();
-    $timeout = 5; // 超时时间（秒）
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36 Edg/100.0.1185.44");
-    // 允许 cURL 跟随重定向
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // 不验证SSL证书
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-    curl_setopt($ch, CURLOPT_ENCODING, ''); // 不限制编码
-    $file_info['exec'] = curl_exec($ch);
-    $file_info['getinfo'] = curl_getinfo($ch);
-    curl_close($ch);
-
-    if ($file_info['getinfo']['http_code'] === 0) {
-        return ['exec' => '', 'getinfo' => []]; // 请求失败
-    }
-
-    return $file_info;
 }
 
 function getIP() {
