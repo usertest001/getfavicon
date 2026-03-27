@@ -3,9 +3,9 @@
 /**
  * 获取favicon
  * @author    yyx
- * @date      2025年3月27日21:30:15
+ * @date      2026-3-27 22:29:23
  * @link      https://log.pub
- * @version   1.0.0
+ * @version   1.0.2603
  */
 header('Content-Type: image/x-icon'); // 输出的是图标格式
 
@@ -18,6 +18,11 @@ if (!is_dir($dir)) {
 // 获取传入的 URL 参数
 $url = isset($_GET['url']) ? trim($_GET['url']) : '';
 
+//传入一个icon地址，直接获取
+$icon = isset($_GET['icon']) ? trim($_GET['icon']) : '';
+//print_r($icon);
+//exit();
+
 $save_fav_dir = $dir . "/" . md5($url) . ".ico"; // 图标保存的路径和名称（使用MD5避免文件名冲突）
 // 调用缓存文件
 if (file_exists($save_fav_dir)) { // 有缓存就直接输出缓存
@@ -27,6 +32,9 @@ if (file_exists($save_fav_dir)) { // 有缓存就直接输出缓存
         die($file);
     }
 }
+
+//参数传入一个$icon 地址获取
+getAndSaveFav($icon, $save_fav_dir);
 
 // 也可以考虑其他常见的 favicon 路径
 $faviconNames = [
@@ -124,6 +132,7 @@ function getAndSaveFav($url, $path) {
 
     // 检查是否为合法的favicon类型
     $allowed_favicon_types = [
+     //   'document',
         'image/x-icon',
         'image/vnd.microsoft.icon',
         'image/png',

@@ -7,6 +7,8 @@
 
 get.php?url=https://log.pub
 
+get.php?url=https://log.pub&icon=https://log.pub/images/favicon.ico
+
 
 
 ![screenshot](./screenshot.png)
